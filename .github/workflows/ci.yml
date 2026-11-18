@@ -6,22 +6,7 @@ on:
     pull_request:
 
 jobs:
-    frontend:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: '22'
-                  cache: npm
-            - run: npm ci
-            - run: npm run format:check
-            - run: npm run lint:check
-            - run: npm run types
-            - run: npm test
-            - run: npm run build
-
-    backend:
+    ci:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -33,10 +18,19 @@ jobs:
               with:
                   node-version: '22'
                   cache: npm
+
+            # Composer first: TypeScript resolves `ziggy-js` from vendor/.
             - run: composer install --no-interaction --prefer-dist
+            - run: npm ci
+
+            - run: npm run format:check
+            - run: npm run lint:check
+            - run: npm run types
+            - run: npm test
             - run: vendor/bin/pint --test
+
             # Feature tests render Inertia pages, which need the Vite manifest.
-            - run: npm ci && npm run build
+            - run: npm run build
             - run: cp .env.example .env && php artisan key:generate
             - run: touch database/database.sqlite
             - run: php artisan test
