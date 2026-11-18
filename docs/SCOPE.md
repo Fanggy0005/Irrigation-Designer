@@ -28,28 +28,34 @@
 
 - **สูตรอยู่ที่เดียว** คือ `resources/js/domain/` เป็นฟังก์ชันล้วน ไม่ import React หรือ Leaflet และทุกสูตรมี test เทียบกับตัวเลขที่คำนวณมือหรือจากเอกสารอ้างอิง
 - **หน่วยเดียวทั้งระบบ** (ดู `domain/units.ts`): ความยาว m, เส้นผ่านศูนย์กลางภายใน mm, อัตราไหล L/h, แรงดันเป็น m (head) แปลงหน่วยเฉพาะตอนรับค่าจากผู้ใช้และตอนแสดงผล
-- **โปรเจกต์คือ object ก้อนเดียว** อยู่ใน store ก้อนเดียว และบันทึกลงคอลัมน์ JSON `projects.design` พร้อม `schema_version` ห้ามใช้ localStorage ส่งข้อมูลระหว่างหน้า
+- **โปรเจกต์คือ object ก้อนเดียว** อยู่ใน store ก้อนเดียว (`editor/store.tsx`) บันทึกอัตโนมัติลงคอลัมน์ JSON `projects.design` ห้ามใช้ localStorage ส่งข้อมูลระหว่างหน้า รูปแบบข้อมูลกำหนดที่ `domain/project.ts` (zod) ที่เดียว ทุก field มีค่า default จึงเพิ่ม field ใหม่ได้โดยแบบเก่ายังเปิดได้ และเลข `version` ใน JSON เปลี่ยนเฉพาะเมื่อต้องแปลงรูปแบบข้อมูลเดิม
 - **ไม่เก็บค่าที่คำนวณได้** เช่น จุดต้นไม้ อัตราไหล หรือ head loss ทุกค่าคำนวณใหม่จาก `Project` ทุกครั้ง
 - **แผนที่ใช้ Leaflet ตัวเดียว** ใช้ภาพดาวเทียม Esri, OSM สำหรับแผนที่ถนน และค้นหาสถานที่ด้วย Photon (จำกัดเฉพาะในไทย) ส่วนการวาดใช้ Leaflet-Geoman
 - ไฟล์หนึ่งไม่ควรเกินประมาณ 300 บรรทัด, TS strict, ห้ามใช้ `any`
 
-## Data model ร่าง
+## Data model
+
+ส่วนที่ทำแล้วดูได้ที่ `domain/project.ts` ส่วนที่ยังเป็นร่าง (M3–M4) จะเพิ่มเป็น field ใหม่ที่มีค่า default
 
 ```ts
 type Project = {
     version: 1;
-    site: { center: LatLng; waterSource: LatLng; sourceElevationM: number };
+    // ── ทำแล้ว (M2) ──
+    site: { waterSource: LatLng | null };
     boundary: LatLng[];
     exclusions: LatLng[][];
     planting: {
-        plantId: string;
+        plantName: string;
         spacingM: number;
         rowSpacingM: number;
-        rowAngleDeg: number;
-        waterLPerDay: number;
-        removed: string[];
+        rowBearingDeg: number; // 0 = แถวเหนือ–ใต้, 90 = ตะวันออก–ตะวันตก
+        staggered: boolean;
+        edgeSetbackM: number;
+        removed: LatLng[]; // ตำแหน่งต้นที่ลบ (จับคู่กับต้นที่สร้างภายในระยะ 1/4 ของระยะปลูก)
         added: LatLng[];
     };
+    // ── ร่าง (M3–M4) ──
+    // site.sourceElevationM, planting.waterLPerDay
     emitter: { flowLph: number; pressureM: number; perPlant: number };
     zones: { id: string; name: string; polygon: LatLng[]; elevationM: number; runMinutes: number }[];
     pipes: {
@@ -72,7 +78,11 @@ type Project = {
     - `hydraulics/pump.ts`: duty point (TDH, กำลัง kW/hp)
     - `sizing.ts`: เสนอขนาดท่อที่เล็กที่สุดที่ความเร็วไม่เกินเกณฑ์
     - `irrigation.ts`: เวลารดน้ำต่อวัน
-- [ ] **M2 แผนที่**: หน้าโครงการ, วาดขอบเขตและพื้นที่ยกเว้น, สร้างจุดปลูก
+- [x] **M2 แผนที่**: หน้าโครงการ, วาดขอบเขตและพื้นที่ยกเว้น, สร้างจุดปลูก
+    - backend: ตาราง `projects`, `ProjectController` (list/create/edit/autosave/delete), `ProjectPolicy` (เจ้าของเท่านั้น)
+    - `domain/geometry.ts`: แปลง lat/lng เป็นเมตร (รัศมีความโค้งของทรงรี WGS84 คลาดไม่เกินประมาณ 0.02% ในระดับแปลงเกษตร), พื้นที่, จุดในรูป
+    - `domain/planting.ts`: สร้างจุดปลูกตามแนวแถว ระยะห่างจากขอบ ปลูกสลับฟันปลา และการลบ/เพิ่มทีละต้น
+    - editor: ค้นหาสถานที่, ปักแหล่งน้ำ, วาด/แก้ขอบเขต, พื้นที่ยกเว้น, ผังปลูก, autosave
 - [ ] **M3 โซนและท่อ**
 - [ ] **M4 panel ชลศาสตร์ + ปั๊ม** (แสดงผลแบบ live ขณะแก้แบบ)
 - [ ] **M5 รายงาน + BOM** แบบพิมพ์ได้

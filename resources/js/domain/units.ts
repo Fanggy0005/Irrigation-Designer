@@ -36,3 +36,11 @@ export function kgfPerCm2ToMHead(kgfPerCm2: number): number {
 export function mHeadToKgfPerCm2(m: number): number {
     return m / 10;
 }
+
+/** Thai land units: 1 rai = 4 ngan = 400 square wa = 1,600 m². */
+export function m2ToRaiNganWa(m2: number): { rai: number; ngan: number; wa: number } {
+    const totalWa = m2 / 4;
+    const rai = Math.floor(totalWa / 400);
+    const ngan = Math.floor((totalWa - rai * 400) / 100);
+    return { rai, ngan, wa: totalWa - rai * 400 - ngan * 100 };
+}

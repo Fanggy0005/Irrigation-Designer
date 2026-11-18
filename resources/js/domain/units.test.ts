@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { barToMHead, kgfPerCm2ToMHead, lphToLpm, lphToM3ps, m3psToLph, mHeadToBar, mHeadToKgfPerCm2 } from './units';
+import { barToMHead, kgfPerCm2ToMHead, lphToLpm, lphToM3ps, m2ToRaiNganWa, m3psToLph, mHeadToBar, mHeadToKgfPerCm2 } from './units';
+
+describe('area', () => {
+    it('splits square metres into rai, ngan and square wa', () => {
+        expect(m2ToRaiNganWa(1_600)).toEqual({ rai: 1, ngan: 0, wa: 0 });
+        expect(m2ToRaiNganWa(2_004)).toEqual({ rai: 1, ngan: 1, wa: 1 });
+        expect(m2ToRaiNganWa(1_599)).toEqual({ rai: 0, ngan: 3, wa: 99.75 });
+    });
+});
 
 describe('flow', () => {
     it('converts L/h to m³/s and back', () => {

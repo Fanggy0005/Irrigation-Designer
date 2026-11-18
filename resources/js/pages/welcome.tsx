@@ -14,7 +14,7 @@ export default function Welcome() {
                 <nav className="flex gap-3">
                     {auth.user ? (
                         <Button asChild>
-                            <Link href={route('dashboard')}>เข้าสู่ระบบงาน</Link>
+                            <Link href={route('projects.index')}>เข้าสู่ระบบงาน</Link>
                         </Button>
                     ) : (
                         <>
