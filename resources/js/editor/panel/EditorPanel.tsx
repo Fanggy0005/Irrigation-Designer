@@ -7,8 +7,10 @@ import { useState } from 'react';
 import { useEditor } from '../store';
 import { BoundaryStep } from './BoundaryStep';
 import { EmitterStep } from './EmitterStep';
+import { HydraulicsStep } from './HydraulicsStep';
 import { PipeStep } from './PipeStep';
 import { PlantingStep } from './PlantingStep';
+import { PumpStep } from './PumpStep';
 import { SiteStep } from './SiteStep';
 import { ZoneStep } from './ZoneStep';
 
@@ -19,6 +21,8 @@ const STEPS = [
     { id: 'emitter', label: 'หัวจ่าย', Component: EmitterStep },
     { id: 'zones', label: 'โซน', Component: ZoneStep },
     { id: 'pipes', label: 'ท่อ', Component: PipeStep },
+    { id: 'hydraulics', label: 'ชลศาสตร์', Component: HydraulicsStep },
+    { id: 'pump', label: 'ปั๊ม', Component: PumpStep },
 ] as const;
 
 export function EditorPanel() {
@@ -35,7 +39,7 @@ export function EditorPanel() {
                 <ProjectName />
                 <SaveStatus />
             </header>
-            <nav className="grid grid-cols-3 border-b">
+            <nav className="grid grid-cols-4 border-b">
                 {STEPS.map((s) => (
                     <button
                         key={s.id}

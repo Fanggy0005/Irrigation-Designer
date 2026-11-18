@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { m2ToRaiNganWa } from '@/domain/units';
+import { m2ToRaiNganWa, mHeadToBar } from '@/domain/units';
 import { type ReactNode, useId, useState } from 'react';
 import { type Tool, useEditor } from '../store';
 
@@ -83,6 +83,11 @@ export function formatArea(m2: number): string {
 
 export function formatFlow(lph: number): string {
     return `${Math.round(lph).toLocaleString()} ลิตร/ชม. (${(lph / 1000).toFixed(2)} ม³/ชม.)`;
+}
+
+/** Pressure as m of head, with bar alongside. */
+export function formatHead(m: number): string {
+    return `${m.toFixed(1)} ม. (${mHeadToBar(m).toFixed(2)} บาร์)`;
 }
 
 export function formatLength(m: number): string {

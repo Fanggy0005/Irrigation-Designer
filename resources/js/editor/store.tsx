@@ -1,5 +1,5 @@
 import { type LatLng } from '@/domain/geometry';
-import { type Emitter, nextId, type PipeKind, type Planting, type Project, type Settings, type Zone } from '@/domain/project';
+import { type Emitter, nextId, type PipeKind, type Planting, type Project, type PumpSettings, type Settings, type Zone } from '@/domain/project';
 import { HttpError, putJson } from '@/lib/http';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import { createStore, type StoreApi, useStore } from 'zustand';
@@ -34,6 +34,7 @@ export type EditorState = {
     setName: (name: string) => void;
     setTool: (tool: Tool) => void;
     setWaterSource: (point: LatLng | null) => void;
+    setSourceElevation: (elevationM: number) => void;
     setBoundary: (ring: LatLng[]) => void;
     addExclusion: (ring: LatLng[]) => void;
     removeExclusion: (index: number) => void;
@@ -47,12 +48,15 @@ export type EditorState = {
     addZone: (polygon: LatLng[]) => void;
     /** Replaces every zone, numbered from 1 in the given order. */
     replaceZones: (polygons: LatLng[][]) => void;
-    updateZone: (id: string, patch: Partial<Pick<Zone, 'name' | 'runMinutes'>>) => void;
+    updateZone: (id: string, patch: Partial<Pick<Zone, 'name' | 'runMinutes' | 'elevationM'>>) => void;
     removeZone: (id: string) => void;
     setZonePolygons: (polygons: ReadonlyMap<string, LatLng[]>) => void;
     addPipe: (kind: PipeKind, path: LatLng[]) => void;
     removePipe: (id: string) => void;
     setPipePaths: (paths: ReadonlyMap<string, LatLng[]>) => void;
+    /** null goes back to the suggested size. */
+    setPipeSpec: (id: string, specId: string | null) => void;
+    updatePump: (patch: Partial<PumpSettings>) => void;
     removeGeneratedLateral: (midpoint: LatLng) => void;
     restoreRemovedLaterals: () => void;
     retrySave: () => void;
@@ -79,6 +83,7 @@ export function createEditorStore(initial: { id: number; name: string; project: 
             setName: (name) => set({ name }),
             setTool: (tool) => set({ tool }),
             setWaterSource: (point) => updateProject((p) => ({ site: { ...p.site, waterSource: point } })),
+            setSourceElevation: (sourceElevationM) => updateProject((p) => ({ site: { ...p.site, sourceElevationM } })),
             setBoundary: (ring) => updateProject(() => ({ boundary: ring })),
             addExclusion: (ring) => updateProject((p) => ({ exclusions: [...p.exclusions, ring] })),
             removeExclusion: (index) => updateProject((p) => ({ exclusions: p.exclusions.filter((_, i) => i !== index) })),
@@ -92,19 +97,28 @@ export function createEditorStore(initial: { id: number; name: string; project: 
             addZone: (polygon) =>
                 updateProject((p) => {
                     const id = nextId('z', p.zones);
-                    return { zones: [...p.zones, { id, name: `โซน ${id.slice(1)}`, polygon, runMinutes: null }] };
+                    const zone = { id, name: `โซน ${id.slice(1)}`, polygon, runMinutes: null, elevationM: p.site.sourceElevationM };
+                    return { zones: [...p.zones, zone] };
                 }),
             replaceZones: (polygons) =>
-                updateProject(() => ({
-                    zones: polygons.map((polygon, i) => ({ id: `z${i + 1}`, name: `โซน ${i + 1}`, polygon, runMinutes: null })),
+                updateProject((p) => ({
+                    zones: polygons.map((polygon, i) => ({
+                        id: `z${i + 1}`,
+                        name: `โซน ${i + 1}`,
+                        polygon,
+                        runMinutes: null,
+                        elevationM: p.site.sourceElevationM,
+                    })),
                 })),
             updateZone: (id, patch) => updateProject((p) => ({ zones: p.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)) })),
             removeZone: (id) => updateProject((p) => ({ zones: p.zones.filter((z) => z.id !== id) })),
             setZonePolygons: (polygons) =>
                 updateProject((p) => ({ zones: p.zones.map((z) => ({ ...z, polygon: polygons.get(z.id) ?? z.polygon })) })),
-            addPipe: (kind, path) => updateProject((p) => ({ pipes: [...p.pipes, { id: nextId('p', p.pipes), kind, path }] })),
+            addPipe: (kind, path) => updateProject((p) => ({ pipes: [...p.pipes, { id: nextId('p', p.pipes), kind, path, specId: null }] })),
             removePipe: (id) => updateProject((p) => ({ pipes: p.pipes.filter((pipe) => pipe.id !== id) })),
             setPipePaths: (paths) => updateProject((p) => ({ pipes: p.pipes.map((pipe) => ({ ...pipe, path: paths.get(pipe.id) ?? pipe.path })) })),
+            setPipeSpec: (id, specId) => updateProject((p) => ({ pipes: p.pipes.map((pipe) => (pipe.id === id ? { ...pipe, specId } : pipe)) })),
+            updatePump: (patch) => updateProject((p) => ({ pump: { ...p.pump, ...patch } })),
             removeGeneratedLateral: (midpoint) => updateProject((p) => ({ laterals: { ...p.laterals, removed: [...p.laterals.removed, midpoint] } })),
             restoreRemovedLaterals: () => updateProject((p) => ({ laterals: { ...p.laterals, removed: [] } })),
             retrySave: () => void save(),

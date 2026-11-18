@@ -6,7 +6,7 @@ describe('parseProject', () => {
         const project = parseProject(null);
         expect(project).toEqual({
             version: 1,
-            site: { waterSource: null },
+            site: { waterSource: null, sourceElevationM: 0 },
             boundary: [],
             exclusions: [],
             planting: {
@@ -24,8 +24,19 @@ describe('parseProject', () => {
             zones: [],
             pipes: [],
             laterals: { removed: [] },
-            settings: { maxZoneFlowLph: 5000 },
+            settings: { maxZoneFlowLph: 5000, minorLossPct: 10, maxVelocityMps: 1.5, maxPressureVariationPct: 20, lateralSpecId: null },
+            pump: { suctionLiftM: 0, suctionLossM: 0, efficiencyPct: 60 },
         });
+    });
+
+    it('opens an M3 design: zones and pipes get an elevation and a suggested size', () => {
+        const point = { lat: 14, lng: 101 };
+        const project = parseProject({
+            zones: [{ id: 'z1', name: 'โซน 1', polygon: [point, point, point], runMinutes: null }],
+            pipes: [{ id: 'p1', kind: 'main', path: [point, point] }],
+        });
+        expect(project.zones[0].elevationM).toBe(0);
+        expect(project.pipes[0].specId).toBeNull();
     });
 
     it('fills fields missing from an older design', () => {

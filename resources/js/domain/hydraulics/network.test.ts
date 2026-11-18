@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Network, type NetworkNode, type NetworkPipe, solveNetwork } from './network';
+import { type Network, type NetworkNode, type NetworkPipe, pipeFlows, solveNetwork } from './network';
 import { frictionLossM } from './pipeFlow';
 
 const pipe = (id: string, a: string, b: string, lengthM = 100, innerDiameterMm = 50, c = 150): NetworkPipe => ({
@@ -146,4 +146,19 @@ it('needs no root pressure when no node sets a minimum', () => {
     const result = solveNetwork({ rootId: 'a', nodes: [node('a'), node('b', 100)], pipes: [pipe('p', 'a', 'b')] }, { minorLossPct: 0 });
     expect(result.requiredRootPressureM).toBe(0);
     expect(result.criticalNodeId).toBeNull();
+});
+
+describe('pipeFlows', () => {
+    it('gives each pipe the demand downstream of it, without sizes', () => {
+        const flows = pipeFlows({
+            rootId: 'pump',
+            nodes: [node('pump'), node('j', 500), node('near', 1_000), node('far', 2_000)],
+            pipes: [
+                { id: 'main', a: 'pump', b: 'j' },
+                { id: 'toNear', a: 'near', b: 'j' },
+                { id: 'toFar', a: 'j', b: 'far' },
+            ],
+        });
+        expect(flows).toEqual({ main: 3_500, toNear: 1_000, toFar: 2_000 });
+    });
 });

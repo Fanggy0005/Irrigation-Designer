@@ -38,7 +38,8 @@ export default function Editor({ project }: Props) {
                 <aside className="bg-background w-80 shrink-0 border-r">
                     <EditorPanel />
                 </aside>
-                <main className="relative flex-1">
+                {/* isolate: keeps Leaflet's z-indexes below dropdowns opened from the panel */}
+                <main className="relative isolate flex-1">
                     <EditorMap />
                 </main>
             </div>

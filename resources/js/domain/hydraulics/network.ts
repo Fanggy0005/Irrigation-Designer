@@ -72,19 +72,32 @@ export type NetworkResult = {
     pipes: Record<string, PipeResult>;
 };
 
-type Link = { pipe: NetworkPipe; other: string };
+/** A network before pipe sizes are chosen: enough to work out the flows. */
+export type NetworkLayout = {
+    rootId: string;
+    nodes: NetworkNode[];
+    pipes: Pick<NetworkPipe, 'id' | 'a' | 'b'>[];
+};
+
+type Link<P> = { pipe: P; other: string };
+
+/**
+ * Flow in each pipe, L/h: the demand of everything downstream of it. Flows do not depend
+ * on pipe sizes, so this is what sizing works from before the network can be solved.
+ */
+export function pipeFlows(network: NetworkLayout): Record<string, number> {
+    const nodes = indexNodes(network);
+    const { order, parentPipe } = orientFromRoot(network, nodes);
+    const subtreeDemand = demandBelow(order, parentPipe, nodes);
+    const flows: Record<string, number> = {};
+    for (const [id, link] of parentPipe) flows[link.pipe.id] = subtreeDemand.get(id)!;
+    return flows;
+}
 
 export function solveNetwork(network: Network, options: SolveOptions): NetworkResult {
     const nodes = indexNodes(network);
     const { order, parentPipe } = orientFromRoot(network, nodes);
-
-    // Flow in the pipe above each node = demand of the node's whole subtree.
-    const subtreeDemand = new Map<string, number>();
-    for (const id of order) subtreeDemand.set(id, nodes.get(id)!.demandLph);
-    for (const id of [...order].reverse()) {
-        const link = parentPipe.get(id);
-        if (link) subtreeDemand.set(link.other, subtreeDemand.get(link.other)! + subtreeDemand.get(id)!);
-    }
+    const subtreeDemand = demandBelow(order, parentPipe, nodes);
 
     const minorFactor = 1 + options.minorLossPct / 100;
     const pipes: Record<string, PipeResult> = {};
@@ -146,7 +159,18 @@ export function solveNetwork(network: Network, options: SolveOptions): NetworkRe
     };
 }
 
-function indexNodes(network: Network): Map<string, NetworkNode> {
+/** Flow in the pipe above each node = demand of the node's whole subtree. */
+function demandBelow<P>(order: readonly string[], parentPipe: ReadonlyMap<string, Link<P>>, nodes: ReadonlyMap<string, NetworkNode>) {
+    const subtreeDemand = new Map<string, number>();
+    for (const id of order) subtreeDemand.set(id, nodes.get(id)!.demandLph);
+    for (const id of [...order].reverse()) {
+        const link = parentPipe.get(id);
+        if (link) subtreeDemand.set(link.other, subtreeDemand.get(link.other)! + subtreeDemand.get(id)!);
+    }
+    return subtreeDemand;
+}
+
+function indexNodes(network: NetworkLayout): Map<string, NetworkNode> {
     const nodes = new Map<string, NetworkNode>();
     for (const node of network.nodes) {
         if (nodes.has(node.id)) throw new Error(`duplicate node id "${node.id}"`);
@@ -158,8 +182,8 @@ function indexNodes(network: Network): Map<string, NetworkNode> {
 }
 
 /** Breadth-first walk from the root. Throws unless the pipes form a tree spanning every node. */
-function orientFromRoot(network: Network, nodes: Map<string, NetworkNode>) {
-    const links = new Map<string, Link[]>();
+function orientFromRoot<P extends Pick<NetworkPipe, 'id' | 'a' | 'b'>>(network: { rootId: string; pipes: P[] }, nodes: Map<string, NetworkNode>) {
+    const links = new Map<string, Link<P>[]>();
     for (const id of nodes.keys()) links.set(id, []);
     for (const pipe of network.pipes) {
         for (const end of [pipe.a, pipe.b]) {
@@ -172,7 +196,7 @@ function orientFromRoot(network: Network, nodes: Map<string, NetworkNode>) {
 
     const order: string[] = [network.rootId];
     /** For each non-root node: the pipe to its parent, and the parent's id. */
-    const parentPipe = new Map<string, Link>();
+    const parentPipe = new Map<string, Link<P>>();
     const seen = new Set([network.rootId]);
     for (let i = 0; i < order.length; i++) {
         const id = order[i];

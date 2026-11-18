@@ -17,6 +17,10 @@ const latLng = z.object({
 });
 const ring = z.array(latLng);
 const id = z.string().min(1).max(20);
+/** Ground level, m, on the same datum as `site.sourceElevationM`. */
+const elevation = z.number().min(-1000).max(10_000).default(0);
+/** A size from `domain/data/pipes.ts`; null = the size the app suggests. */
+const specId = z.string().max(50).nullable().default(null);
 
 export const PIPE_KINDS = ['main', 'submain', 'lateral'] as const;
 
@@ -25,6 +29,8 @@ export const projectSchema = z.object({
     site: z
         .object({
             waterSource: latLng.nullable().default(null),
+            /** Ground level at the pump, m. Only differences between levels matter. */
+            sourceElevationM: elevation,
         })
         .prefault({}),
     boundary: ring.default(() => []),
@@ -59,6 +65,8 @@ export const projectSchema = z.object({
                 polygon: ring,
                 /** Minutes per day; null = the time that gives each plant `planting.waterLPerDay`. */
                 runMinutes: z.number().min(0).max(1440).nullable().default(null),
+                /** Ground level of the whole zone (v1 treats each zone as flat). */
+                elevationM: elevation,
             }),
         )
         .default(() => []),
@@ -73,6 +81,7 @@ export const projectSchema = z.object({
                 id,
                 kind: z.enum(PIPE_KINDS),
                 path: ring,
+                specId,
             }),
         )
         .default(() => []),
@@ -86,6 +95,23 @@ export const projectSchema = z.object({
         .object({
             /** Largest flow one zone may draw, L/h: the limit automatic zoning works to. */
             maxZoneFlowLph: z.number().min(10).max(1_000_000).default(5000),
+            /** Fittings and valves, as a percentage of friction loss. */
+            minorLossPct: z.number().min(0).max(100).default(10),
+            /** Velocity limit that size suggestions keep to, m/s. */
+            maxVelocityMps: z.number().min(0.1).max(5).default(1.5),
+            /** Allowed spread of emitter pressure in a zone, % of the emitter's operating pressure. */
+            maxPressureVariationPct: z.number().min(1).max(100).default(20),
+            /** Size of every generated lateral (a drawn lateral has its own `specId`). */
+            lateralSpecId: specId,
+        })
+        .prefault({}),
+    pump: z
+        .object({
+            /** Height of the pump above the water surface, m; negative when it sits below. */
+            suctionLiftM: z.number().min(-50).max(15).default(0),
+            /** Loss in the suction pipe and foot valve, m. */
+            suctionLossM: z.number().min(0).max(50).default(0),
+            efficiencyPct: z.number().min(10).max(100).default(60),
         })
         .prefault({}),
 });
@@ -97,6 +123,7 @@ export type Zone = Project['zones'][number];
 export type DesignPipe = Project['pipes'][number];
 export type PipeKind = DesignPipe['kind'];
 export type Settings = Project['settings'];
+export type PumpSettings = Project['pump'];
 
 /** Reads a saved design (null for a new project). Throws if the data is not a valid design. */
 export function parseProject(design: unknown): Project {
