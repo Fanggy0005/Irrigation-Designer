@@ -1,4 +1,4 @@
-import { distanceToRing, type LatLng, localFrame, pointInRing, type XY } from './geometry';
+import { distanceToRing, type LatLng, localFrame, pointInRing, rowFrame, type XY } from './geometry';
 
 export type PlantingLayout = {
     /** Distance between plants along a row, m. */
@@ -71,11 +71,7 @@ function gridPlants(
     toLocal: (p: LatLng) => XY,
 ): { row: number; col: number; xy: XY }[] {
     // Work in a frame rotated to the rows: u runs along a row, v across rows.
-    const b = layout.rowBearingDeg * (Math.PI / 180);
-    const along = { x: Math.sin(b), y: Math.cos(b) };
-    const across = { x: Math.cos(b), y: -Math.sin(b) };
-    const toUV = (p: XY): XY => ({ x: p.x * along.x + p.y * along.y, y: p.x * across.x + p.y * across.y });
-    const fromUV = (q: XY): XY => ({ x: q.x * along.x + q.y * across.x, y: q.x * along.y + q.y * across.y });
+    const { toUV, fromUV } = rowFrame(layout.rowBearingDeg);
 
     const outline = boundary.map((p) => toUV(toLocal(p)));
     const holes = exclusions.filter((ring) => ring.length >= 3).map((ring) => ring.map((p) => toUV(toLocal(p))));

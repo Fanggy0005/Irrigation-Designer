@@ -9,7 +9,9 @@ import { useEditorStore } from '../store';
 import { ClickTool } from './ClickTool';
 import { DesignLayers } from './DesignLayers';
 import { DrawTool } from './DrawTool';
+import { PipeLayer } from './PipeLayer';
 import { PlantLayer } from './PlantLayer';
+import { ZoneLayer } from './ZoneLayer';
 
 const THAILAND = { center: L.latLng(13.5, 101), zoom: 6 };
 
@@ -29,7 +31,9 @@ export function EditorMap() {
             <ScaleControl imperial={false} position="bottomright" />
             <PlaceSearch />
             <DesignLayers />
+            <ZoneLayer />
             <PlantLayer />
+            <PipeLayer />
             <DrawTool />
             <ClickTool />
         </MapContainer>

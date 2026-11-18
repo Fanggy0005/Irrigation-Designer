@@ -54,6 +54,14 @@ export function PlantingStep() {
                 value={planting.edgeSetbackM}
                 onChange={(edgeSetbackM) => update({ edgeSetbackM })}
             />
+            <NumberField
+                label="ปริมาณน้ำต่อต้นต่อวัน"
+                unit="ลิตร"
+                min={0}
+                max={5000}
+                value={planting.waterLPerDay}
+                onChange={(waterLPerDay) => update({ waterLPerDay })}
+            />
             <div className="flex items-center gap-2">
                 <Checkbox id="staggered" checked={planting.staggered} onCheckedChange={(checked) => update({ staggered: checked === true })} />
                 <Label htmlFor="staggered">ปลูกสลับฟันปลา (แถวคู่เลื่อนครึ่งระยะต้น)</Label>

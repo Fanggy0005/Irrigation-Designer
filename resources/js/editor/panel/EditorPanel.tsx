@@ -6,13 +6,19 @@ import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useEditor } from '../store';
 import { BoundaryStep } from './BoundaryStep';
+import { EmitterStep } from './EmitterStep';
+import { PipeStep } from './PipeStep';
 import { PlantingStep } from './PlantingStep';
 import { SiteStep } from './SiteStep';
+import { ZoneStep } from './ZoneStep';
 
 const STEPS = [
     { id: 'site', label: 'ที่ตั้ง', Component: SiteStep },
     { id: 'boundary', label: 'ขอบเขต', Component: BoundaryStep },
     { id: 'planting', label: 'การปลูก', Component: PlantingStep },
+    { id: 'emitter', label: 'หัวจ่าย', Component: EmitterStep },
+    { id: 'zones', label: 'โซน', Component: ZoneStep },
+    { id: 'pipes', label: 'ท่อ', Component: PipeStep },
 ] as const;
 
 export function EditorPanel() {

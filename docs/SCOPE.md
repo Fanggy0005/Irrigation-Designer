@@ -35,12 +35,12 @@
 
 ## Data model
 
-ส่วนที่ทำแล้วดูได้ที่ `domain/project.ts` ส่วนที่ยังเป็นร่าง (M3–M4) จะเพิ่มเป็น field ใหม่ที่มีค่า default
+ส่วนที่ทำแล้วดูได้ที่ `domain/project.ts` ส่วนที่ยังเป็นร่าง (M4) จะเพิ่มเป็น field ใหม่ที่มีค่า default
 
 ```ts
 type Project = {
     version: 1;
-    // ── ทำแล้ว (M2) ──
+    // ── ทำแล้ว (M2–M3) ──
     site: { waterSource: LatLng | null };
     boundary: LatLng[];
     exclusions: LatLng[][];
@@ -53,21 +53,21 @@ type Project = {
         edgeSetbackM: number;
         removed: LatLng[]; // ตำแหน่งต้นที่ลบ (จับคู่กับต้นที่สร้างภายในระยะ 1/4 ของระยะปลูก)
         added: LatLng[];
+        waterLPerDay: number; // ลิตร/ต้น/วัน, 0 = ยังไม่กรอก
     };
-    // ── ร่าง (M3–M4) ──
-    // site.sourceElevationM, planting.waterLPerDay
     emitter: { flowLph: number; pressureM: number; perPlant: number };
-    zones: { id: string; name: string; polygon: LatLng[]; elevationM: number; runMinutes: number }[];
-    pipes: {
-        id: string;
-        kind: 'main' | 'submain' | 'lateral';
-        path: LatLng[];
-        zoneId?: string;
-        specId?: string; // ถ้าไม่มี = ใช้ขนาดที่ระบบเสนอ
-    }[];
-    settings: { minorLossPct: number; maxVelocityMps: number; maxPressureVariationPct: number; pumpEfficiency: number };
+    zones: { id: string; name: string; polygon: LatLng[]; runMinutes: number | null }[]; // null = คำนวณจาก waterLPerDay
+    pipes: { id: string; kind: 'main' | 'submain' | 'lateral'; path: LatLng[] }[]; // เฉพาะท่อที่วาดเอง
+    laterals: { removed: LatLng[] }; // จุดกึ่งกลางของท่อแขนงอัตโนมัติที่ลบ
+    settings: { maxZoneFlowLph: number };
+    // ── ร่าง (M4) ──
+    // site.sourceElevationM, zones[].elevationM
+    // pipes[].specId?: string  (ถ้าไม่มี = ใช้ขนาดที่ระบบเสนอ)
+    // settings: minorLossPct, maxVelocityMps, maxPressureVariationPct, pumpEfficiency
 };
 ```
+
+ท่อไม่เก็บ `zoneId` เพราะโซนของท่อหาได้จากตำแหน่ง (โซนที่ท่อผ่านยาวที่สุด, `domain/zones.ts`) ถ้าแบ่งโซนใหม่ ท่อจึงไม่ชี้ไปยังโซนที่ไม่มีอยู่แล้ว
 
 ## Milestones
 
@@ -83,12 +83,21 @@ type Project = {
     - `domain/geometry.ts`: แปลง lat/lng เป็นเมตร (รัศมีความโค้งของทรงรี WGS84 คลาดไม่เกินประมาณ 0.02% ในระดับแปลงเกษตร), พื้นที่, จุดในรูป
     - `domain/planting.ts`: สร้างจุดปลูกตามแนวแถว ระยะห่างจากขอบ ปลูกสลับฟันปลา และการลบ/เพิ่มทีละต้น
     - editor: ค้นหาสถานที่, ปักแหล่งน้ำ, วาด/แก้ขอบเขต, พื้นที่ยกเว้น, ผังปลูก, autosave
-- [ ] **M3 โซนและท่อ**
+- [x] **M3 โซนและท่อ**
+    - `domain/zones.ts`: แบ่งต้นเข้าโซน (โซนซ้อนกันได้ โซนที่มาก่อนได้ต้นไป) และหาโซนของท่อ
+    - `domain/zoning.ts`: แบ่งโซนอัตโนมัติเป็นกลุ่มแถวต่อเนื่อง ใช้จำนวนโซนน้อยที่สุดที่ไม่เกินอัตราไหลสูงสุด จำนวนต้นใกล้เคียงกัน ถ้าแถวเดียวยาวเกินโซนจะตัดขวางแถวก่อน
+    - `domain/pipes.ts`: ตรวจการต่อท่อจากแหล่งน้ำ (เมน ← แหล่งน้ำ/เมน, เมนย่อย ← แหล่งน้ำ/เมน/เมนย่อย, แขนง ← เมนย่อย) ปลายท่อต้องห่างไม่เกิน 1 ม. ได้ตำแหน่งจุดแยกบนท่อต้นทางไว้ใช้สร้าง network ใน M4
+    - `domain/laterals.ts`: ท่อแขนงอัตโนมัติ และท่อแขนงที่วาดเอง
+    - editor: ขั้นหัวจ่าย, ขั้นโซน (แบ่งอัตโนมัติ/วาดเอง/แก้รูป/เวลารดน้ำ), ขั้นท่อ (วาด/แก้แนว/ลบ, ความยาวท่อ, ตรวจแบบ), ปลายท่อดูดติดท่อเส้นอื่น (Geoman snapping), ต้นที่ไม่มีท่อแขนงมีขอบแดง
 - [ ] **M4 panel ชลศาสตร์ + ปั๊ม** (แสดงผลแบบ live ขณะแก้แบบ)
+    - สร้าง `Network` จากแบบ: แหล่งน้ำ → ท่อตาม `connectPipes` (ตัดท่อที่จุดแยก) → ท่อแขนง → ต้นละหนึ่ง node ที่มี demand = จำนวนหัว × อัตราไหล
 - [ ] **M5 รายงาน + BOM** แบบพิมพ์ได้
+
+## ตัดสินใจแล้ว
+
+- **กฎการวางท่อแขนงอัตโนมัติ (M3):** แถวละหนึ่งเส้น แยกซ้าย–ขวาของจุดที่ท่อเมนย่อยของโซนตัดผ่านแถว และวิ่งไปถึงต้นสุดท้ายในโซนฝั่งนั้น ต้นแต่ละต้นต่อกับจุดตัดที่ใกล้ที่สุดตามแนวแถว แถวที่ท่อเมนย่อยไม่ผ่านจะไม่มีท่อแขนง ท่อแขนงที่วาดเองได้ต้นที่อยู่ห่างไม่เกินครึ่งหนึ่งของระยะต้นหรือระยะแถว (ค่าที่น้อยกว่า) ไปก่อน ต้นที่เพิ่มเองไม่อยู่บนแถว จึงต้องวาดท่อแขนงไปหา แถวคู่ใช้ท่อร่วมกันยังไม่รองรับ (ถ้าต้องการให้วาดเอง)
 
 ## ยังต้องตัดสินใจ
 
-- กฎการวางท่อแขนงอัตโนมัติ (วางหนึ่งเส้นต่อแถว หรือแถวคู่ใช้ท่อร่วมกัน)
 - ฐานข้อมูลตอนใช้งานจริง (ตอนพัฒนาใช้ SQLite)
 - ตารางขนาดท่อมาตรฐาน (`domain/data/pipes.ts`): ใช้มาตรฐานไหน (PVC มอก. 17 class 5/8.5/13.5, PE ISO 4427 / มอก. 982, LDPE ท่อแขนง) และค่า OD/ความหนาผนังต้องมาจากเอกสารมาตรฐานจริง ห้ามเดา

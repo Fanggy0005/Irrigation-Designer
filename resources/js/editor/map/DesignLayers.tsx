@@ -1,13 +1,6 @@
 import { CircleMarker, Polygon, Tooltip } from 'react-leaflet';
+import { COLORS } from '../colors';
 import { useEditor } from '../store';
-
-export const COLORS = {
-    boundary: '#facc15',
-    exclusion: '#ef4444',
-    waterSource: '#2563eb',
-    plant: '#22c55e',
-    addedPlant: '#22d3ee',
-};
 
 /** Boundary, excluded areas and water source as drawn by the designer. */
 export function DesignLayers() {

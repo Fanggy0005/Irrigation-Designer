@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { distanceToRing, localFrame, pointInRing, polygonAreaM2 } from './geometry';
+import {
+    clipRingToBox,
+    closestPointOnPath,
+    distanceToRing,
+    localFrame,
+    pathLengthM,
+    pointInRing,
+    pointsAlongPath,
+    polygonAreaM2,
+    rowFrame,
+} from './geometry';
 
 describe('localFrame', () => {
     // Reference lengths of one degree on WGS84 at 15°N (standard tables): 110,649 m of
@@ -60,5 +70,120 @@ describe('pointInRing and distanceToRing', () => {
         expect(distanceToRing({ x: 5, y: 2 }, square)).toBeCloseTo(2, 12);
         expect(distanceToRing({ x: 1, y: 5 }, square)).toBeCloseTo(1, 12); // closing edge x = 0
         expect(distanceToRing({ x: 13, y: 14 }, square)).toBeCloseTo(5, 12); // corner (10, 10)
+    });
+});
+
+describe('rowFrame', () => {
+    it('puts u along the rows and v across them', () => {
+        // Rows running east–west (bearing 90): a point 10 m east is 10 m along a row.
+        const { toUV } = rowFrame(90);
+        const east = toUV({ x: 10, y: 0 });
+        expect(east.x).toBeCloseTo(10, 12);
+        expect(east.y).toBeCloseTo(0, 12);
+        const north = toUV({ x: 0, y: 10 });
+        expect(north.x).toBeCloseTo(0, 12);
+        expect(Math.abs(north.y)).toBeCloseTo(10, 12);
+    });
+
+    it('round-trips', () => {
+        const { toUV, fromUV } = rowFrame(37);
+        const back = fromUV(toUV({ x: 3, y: -4 }));
+        expect(back.x).toBeCloseTo(3, 12);
+        expect(back.y).toBeCloseTo(-4, 12);
+    });
+});
+
+describe('pathLengthM', () => {
+    it('adds up the segments: 30 m east then 40 m north is 70 m', () => {
+        const frame = localFrame({ lat: 14, lng: 101 });
+        const path = [
+            { x: 0, y: 0 },
+            { x: 30, y: 0 },
+            { x: 30, y: 40 },
+        ].map(frame.toLatLng);
+        expect(pathLengthM(path)).toBeCloseTo(70, 6);
+        expect(pathLengthM(path.slice(0, 1))).toBe(0);
+    });
+});
+
+describe('closestPointOnPath', () => {
+    const path = [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 },
+    ];
+
+    it('finds the nearest point and how far along the path it is', () => {
+        expect(closestPointOnPath({ x: 4, y: 3 }, path)).toEqual({ point: { x: 4, y: 0 }, distance: 3, alongM: 4 });
+        expect(closestPointOnPath({ x: 12, y: 6 }, path)).toEqual({ point: { x: 10, y: 6 }, distance: 2, alongM: 16 });
+    });
+
+    it('stops at the ends (no closing edge)', () => {
+        const hit = closestPointOnPath({ x: -3, y: 4 }, path)!;
+        expect(hit.point).toEqual({ x: 0, y: 0 });
+        expect(hit.distance).toBe(5);
+        expect(closestPointOnPath({ x: 0, y: 10 }, path)!.distance).toBe(10); // not 0 via a closing edge
+    });
+
+    it('handles single points and empty paths', () => {
+        expect(closestPointOnPath({ x: 3, y: 4 }, [{ x: 0, y: 0 }])).toEqual({ point: { x: 0, y: 0 }, distance: 5, alongM: 0 });
+        expect(closestPointOnPath({ x: 3, y: 4 }, [])).toBeNull();
+    });
+});
+
+describe('pointsAlongPath', () => {
+    it('spreads points evenly by length, across vertices', () => {
+        const path = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+        ];
+        expect(pointsAlongPath(path, 5)).toEqual([
+            { x: 0, y: 0 },
+            { x: 5, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 5 },
+            { x: 10, y: 10 },
+        ]);
+    });
+});
+
+describe('clipRingToBox', () => {
+    const square = [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 },
+        { x: 0, y: 10 },
+    ];
+    const area = (ring: { x: number; y: number }[]) =>
+        Math.abs(ring.reduce((sum, a, i) => sum + a.x * ring[(i + 1) % ring.length].y - ring[(i + 1) % ring.length].x * a.y, 0)) / 2;
+
+    it('keeps the part inside the box', () => {
+        const clipped = clipRingToBox(square, { minX: 4, maxX: Infinity, minY: -Infinity, maxY: 7 });
+        expect(area(clipped)).toBeCloseTo(6 * 7, 10);
+        expect(clipped.every((p) => p.x >= 4 && p.y <= 7)).toBe(true);
+    });
+
+    it('returns the polygon unchanged for an open box, and nothing for a box beside it', () => {
+        expect(clipRingToBox(square, { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity })).toEqual(square);
+        expect(clipRingToBox(square, { minX: 20, maxX: 30, minY: 0, maxY: 10 })).toEqual([]);
+    });
+
+    it('clips a concave polygon without losing area', () => {
+        // U shape: two 2 m arms joined by a 2 m base; a band across the arms cuts it in two.
+        const u = [
+            { x: 0, y: 0 },
+            { x: 6, y: 0 },
+            { x: 6, y: 6 },
+            { x: 4, y: 6 },
+            { x: 4, y: 2 },
+            { x: 2, y: 2 },
+            { x: 2, y: 6 },
+            { x: 0, y: 6 },
+        ];
+        const band = clipRingToBox(u, { minX: -Infinity, maxX: Infinity, minY: 3, maxY: 5 });
+        expect(area(band)).toBeCloseTo(2 * 2 + 2 * 2, 10);
+        expect(pointInRing({ x: 1, y: 4 }, band)).toBe(true);
+        expect(pointInRing({ x: 3, y: 4 }, band)).toBe(false); // the gap between the arms
     });
 });

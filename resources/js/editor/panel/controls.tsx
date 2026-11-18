@@ -17,11 +17,21 @@ export function ToolButton({ tool, children, activeLabel }: { tool: Tool; childr
 }
 
 /**
- * A number input that only reports values inside [min, max]. While the text is
- * incomplete or out of range ("", "6.", "0") the last good value stays in the design.
+ * A number input that only reports values inside [min, max] (whole numbers only with
+ * `integer`). While the text is incomplete or out of range ("", "6.", "0") the last good
+ * value stays in the design. Keep the limits in line with `domain/project.ts`, or the
+ * saved design will not load again.
  */
-export function NumberField(props: { label: string; unit?: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
-    const { label, unit, value, min, max, onChange } = props;
+export function NumberField(props: {
+    label: string;
+    unit?: string;
+    value: number;
+    min: number;
+    max: number;
+    integer?: boolean;
+    onChange: (value: number) => void;
+}) {
+    const { label, unit, value, min, max, integer = false, onChange } = props;
     const id = useId();
     const [text, setText] = useState(String(value));
     const [shownValue, setShownValue] = useState(value);
@@ -34,7 +44,7 @@ export function NumberField(props: { label: string; unit?: string; value: number
 
     const parse = (s: string) => {
         const n = Number(s);
-        return s.trim() !== '' && Number.isFinite(n) && n >= min && n <= max ? n : null;
+        return s.trim() !== '' && Number.isFinite(n) && n >= min && n <= max && (!integer || Number.isInteger(n)) ? n : null;
     };
     const valid = parse(text) !== null;
 
@@ -46,7 +56,7 @@ export function NumberField(props: { label: string; unit?: string; value: number
                     id={id}
                     // Text, not type="number": browsers disagree on what a half-typed number reads as.
                     type="text"
-                    inputMode="decimal"
+                    inputMode={integer ? 'numeric' : 'decimal'}
                     value={text}
                     aria-invalid={!valid}
                     onChange={(e) => {
@@ -59,7 +69,7 @@ export function NumberField(props: { label: string; unit?: string; value: number
             </div>
             {!valid && (
                 <p className="text-xs text-red-600">
-                    ใส่ค่าระหว่าง {min} ถึง {max}
+                    ใส่{integer ? 'จำนวนเต็ม' : 'ค่า'}ระหว่าง {min} ถึง {max}
                 </p>
             )}
         </div>
@@ -69,6 +79,21 @@ export function NumberField(props: { label: string; unit?: string; value: number
 export function formatArea(m2: number): string {
     const { rai, ngan, wa } = m2ToRaiNganWa(m2);
     return `${rai.toLocaleString()} ไร่ ${ngan} งาน ${wa.toFixed(1)} ตร.วา (${Math.round(m2).toLocaleString()} ม²)`;
+}
+
+export function formatFlow(lph: number): string {
+    return `${Math.round(lph).toLocaleString()} ลิตร/ชม. (${(lph / 1000).toFixed(2)} ม³/ชม.)`;
+}
+
+export function formatLength(m: number): string {
+    return `${Math.round(m).toLocaleString()} ม.`;
+}
+
+export function formatMinutes(minutes: number): string {
+    const rounded = Math.round(minutes);
+    if (rounded < 60) return `${rounded} นาที`;
+    const hours = Math.floor(rounded / 60);
+    return rounded % 60 === 0 ? `${hours} ชม.` : `${hours} ชม. ${rounded % 60} นาที`;
 }
 
 export function Hint({ children }: { children: ReactNode }) {

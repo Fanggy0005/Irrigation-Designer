@@ -1,11 +1,25 @@
 import { type LatLng } from '@/domain/geometry';
-import { type Planting, type Project } from '@/domain/project';
+import { type Emitter, nextId, type PipeKind, type Planting, type Project, type Settings, type Zone } from '@/domain/project';
 import { HttpError, putJson } from '@/lib/http';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import { createStore, type StoreApi, useStore } from 'zustand';
 
 /** What a click or drag on the map does right now. */
-export type Tool = 'none' | 'placeWaterSource' | 'drawBoundary' | 'editBoundary' | 'drawExclusion' | 'removePlant' | 'addPlant';
+export type Tool =
+    | 'none'
+    | 'placeWaterSource'
+    | 'drawBoundary'
+    | 'editBoundary'
+    | 'drawExclusion'
+    | 'removePlant'
+    | 'addPlant'
+    | 'drawZone'
+    | 'editZones'
+    | 'drawMain'
+    | 'drawSubmain'
+    | 'drawLateral'
+    | 'editPipes'
+    | 'removePipe';
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
 
@@ -28,6 +42,19 @@ export type EditorState = {
     restoreRemovedPlants: () => void;
     addPlant: (position: LatLng) => void;
     removeAddedPlant: (index: number) => void;
+    updateEmitter: (patch: Partial<Emitter>) => void;
+    updateSettings: (patch: Partial<Settings>) => void;
+    addZone: (polygon: LatLng[]) => void;
+    /** Replaces every zone, numbered from 1 in the given order. */
+    replaceZones: (polygons: LatLng[][]) => void;
+    updateZone: (id: string, patch: Partial<Pick<Zone, 'name' | 'runMinutes'>>) => void;
+    removeZone: (id: string) => void;
+    setZonePolygons: (polygons: ReadonlyMap<string, LatLng[]>) => void;
+    addPipe: (kind: PipeKind, path: LatLng[]) => void;
+    removePipe: (id: string) => void;
+    setPipePaths: (paths: ReadonlyMap<string, LatLng[]>) => void;
+    removeGeneratedLateral: (midpoint: LatLng) => void;
+    restoreRemovedLaterals: () => void;
     retrySave: () => void;
 };
 
@@ -60,6 +87,26 @@ export function createEditorStore(initial: { id: number; name: string; project: 
             restoreRemovedPlants: () => updatePlanting(() => ({ removed: [] })),
             addPlant: (position) => updatePlanting((p) => ({ added: [...p.added, position] })),
             removeAddedPlant: (index) => updatePlanting((p) => ({ added: p.added.filter((_, i) => i !== index) })),
+            updateEmitter: (patch) => updateProject((p) => ({ emitter: { ...p.emitter, ...patch } })),
+            updateSettings: (patch) => updateProject((p) => ({ settings: { ...p.settings, ...patch } })),
+            addZone: (polygon) =>
+                updateProject((p) => {
+                    const id = nextId('z', p.zones);
+                    return { zones: [...p.zones, { id, name: `โซน ${id.slice(1)}`, polygon, runMinutes: null }] };
+                }),
+            replaceZones: (polygons) =>
+                updateProject(() => ({
+                    zones: polygons.map((polygon, i) => ({ id: `z${i + 1}`, name: `โซน ${i + 1}`, polygon, runMinutes: null })),
+                })),
+            updateZone: (id, patch) => updateProject((p) => ({ zones: p.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)) })),
+            removeZone: (id) => updateProject((p) => ({ zones: p.zones.filter((z) => z.id !== id) })),
+            setZonePolygons: (polygons) =>
+                updateProject((p) => ({ zones: p.zones.map((z) => ({ ...z, polygon: polygons.get(z.id) ?? z.polygon })) })),
+            addPipe: (kind, path) => updateProject((p) => ({ pipes: [...p.pipes, { id: nextId('p', p.pipes), kind, path }] })),
+            removePipe: (id) => updateProject((p) => ({ pipes: p.pipes.filter((pipe) => pipe.id !== id) })),
+            setPipePaths: (paths) => updateProject((p) => ({ pipes: p.pipes.map((pipe) => ({ ...pipe, path: paths.get(pipe.id) ?? pipe.path })) })),
+            removeGeneratedLateral: (midpoint) => updateProject((p) => ({ laterals: { ...p.laterals, removed: [...p.laterals.removed, midpoint] } })),
+            restoreRemovedLaterals: () => updateProject((p) => ({ laterals: { ...p.laterals, removed: [] } })),
             retrySave: () => void save(),
         };
     });
