@@ -64,6 +64,17 @@ describe('parseProject', () => {
         expect(project.pipes[0].kind).toBe('main');
     });
 
+    it('reopens a design saved through the server, where PHP turns an empty {} into []', () => {
+        // Laravel decodes JSON into PHP arrays, which cannot tell {} from [], so an empty
+        // record comes back from the database as an empty list.
+        const throughPhp = (value: unknown) => JSON.parse(JSON.stringify(value).replaceAll('{}', '[]'));
+        const saved = throughPhp(parseProject(null));
+        expect(saved.bom.pieceLengthM).toEqual([]);
+        expect(parseProject(saved).bom.pieceLengthM).toEqual({});
+        expect(parseProject({ bom: { pieceLengthM: { 'PVC 8.5': 4 } } }).bom.pieceLengthM).toEqual({ 'PVC 8.5': 4 });
+        expect(() => parseProject({ bom: { pieceLengthM: [4] } })).toThrow();
+    });
+
     it('rejects values outside their range', () => {
         expect(() => parseProject({ planting: { spacingM: 0.1 } })).toThrow();
         expect(() => parseProject({ boundary: [{ lat: 95, lng: 100 }] })).toThrow();

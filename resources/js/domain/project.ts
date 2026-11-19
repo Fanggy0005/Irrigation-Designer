@@ -117,10 +117,18 @@ export const projectSchema = z.object({
     bom: z
         .object({
             /** Length of one pipe piece or roll by series name, m, as the designer buys it. Not in the standards. */
-            pieceLengthM: z.record(z.string().max(100), z.number().min(1).max(10_000)).default(() => ({})),
+            pieceLengthM: z.preprocess(emptyListAsRecord, z.record(z.string().max(100), z.number().min(1).max(10_000))).default(() => ({})),
         })
         .prefault({}),
 });
+
+/**
+ * Reads an empty list as an empty record. The server decodes the design into PHP arrays,
+ * which cannot tell {} from [], so an empty record is saved back as [].
+ */
+function emptyListAsRecord(value: unknown): unknown {
+    return Array.isArray(value) && value.length === 0 ? {} : value;
+}
 
 export type Project = z.infer<typeof projectSchema>;
 export type Planting = Project['planting'];
