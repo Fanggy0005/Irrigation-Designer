@@ -18,4 +18,10 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    server: {
+        watch: {
+            // No frontend source here. Matters in the container, where the watcher polls every file.
+            ignored: ['**/vendor/**', '**/storage/**', '**/bootstrap/cache/**', '**/database/**', '**/tests/**', '**/docs/**'],
+        },
+    },
 });
