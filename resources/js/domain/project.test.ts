@@ -26,6 +26,7 @@ describe('parseProject', () => {
             laterals: { removed: [] },
             settings: { maxZoneFlowLph: 5000, minorLossPct: 10, maxVelocityMps: 1.5, maxPressureVariationPct: 20, lateralSpecId: null },
             pump: { suctionLiftM: 0, suctionLossM: 0, efficiencyPct: 60 },
+            bom: { pieceLengthM: {} },
         });
     });
 

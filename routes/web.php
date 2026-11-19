@@ -13,6 +13,7 @@ Route::middleware(['auth'])->group(function () {
     Route::redirect('dashboard', '/projects')->name('dashboard');
 
     Route::resource('projects', ProjectController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+    Route::get('projects/{project}/report', [ProjectController::class, 'report'])->name('projects.report');
 });
 
 require __DIR__.'/settings.php';

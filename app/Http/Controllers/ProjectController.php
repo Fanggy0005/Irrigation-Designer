@@ -41,6 +41,16 @@ class ProjectController extends Controller
         ]);
     }
 
+    /** Printable report of the saved design; the editor opens it once its last edits are saved. */
+    public function report(Project $project): Response
+    {
+        Gate::authorize('view', $project);
+
+        return Inertia::render('projects/report', [
+            'project' => $project->only(['id', 'name', 'design', 'updated_at']),
+        ]);
+    }
+
     /** Called by the editor's autosave with JSON; the design's shape is checked client-side. */
     public function update(Request $request, Project $project): HttpResponse
     {

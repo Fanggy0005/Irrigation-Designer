@@ -11,6 +11,7 @@ import { HydraulicsStep } from './HydraulicsStep';
 import { PipeStep } from './PipeStep';
 import { PlantingStep } from './PlantingStep';
 import { PumpStep } from './PumpStep';
+import { ReportStep } from './ReportStep';
 import { SiteStep } from './SiteStep';
 import { ZoneStep } from './ZoneStep';
 
@@ -23,6 +24,7 @@ const STEPS = [
     { id: 'pipes', label: 'ท่อ', Component: PipeStep },
     { id: 'hydraulics', label: 'ชลศาสตร์', Component: HydraulicsStep },
     { id: 'pump', label: 'ปั๊ม', Component: PumpStep },
+    { id: 'report', label: 'รายงาน', Component: ReportStep },
 ] as const;
 
 export function EditorPanel() {
@@ -39,7 +41,7 @@ export function EditorPanel() {
                 <ProjectName />
                 <SaveStatus />
             </header>
-            <nav className="grid grid-cols-4 border-b">
+            <nav className="grid grid-cols-5 border-b">
                 {STEPS.map((s) => (
                     <button
                         key={s.id}

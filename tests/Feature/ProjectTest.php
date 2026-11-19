@@ -82,6 +82,26 @@ class ProjectTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_the_owner_gets_the_report_of_the_saved_design()
+    {
+        $project = Project::factory()->create(['design' => ['version' => 1, 'boundary' => []]]);
+
+        $this->actingAs($project->user)->get("/projects/{$project->id}/report")
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('projects/report')
+                ->where('project.id', $project->id)
+                ->where('project.design.version', 1)
+                ->has('project.updated_at'));
+    }
+
+    public function test_reports_are_for_the_owner_only()
+    {
+        $project = Project::factory()->create();
+
+        $this->get("/projects/{$project->id}/report")->assertRedirect('/login');
+        $this->actingAs(User::factory()->create())->get("/projects/{$project->id}/report")->assertForbidden();
+    }
+
     public function test_users_cannot_open_change_or_delete_someone_elses_project()
     {
         $project = Project::factory()->create();

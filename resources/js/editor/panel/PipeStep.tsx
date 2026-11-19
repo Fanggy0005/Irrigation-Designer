@@ -2,12 +2,11 @@ import { Button } from '@/components/ui/button';
 import { pathLengthM } from '@/domain/geometry';
 import { type PipeKind } from '@/domain/project';
 import { CheckCircle2 } from 'lucide-react';
+import { PIPE_KIND_LABELS as KIND_LABELS, pipeLabel, zoneLabel } from '../labels';
 import { usePipeLayout } from '../pipes';
 import { useEditor } from '../store';
 import { useZonePlants } from '../zones';
 import { formatLength, Hint, ToolButton } from './controls';
-
-const KIND_LABELS: Record<PipeKind, string> = { main: 'ท่อเมน', submain: 'ท่อเมนย่อย', lateral: 'ท่อแขนง' };
 
 export function PipeStep() {
     const hasSource = useEditor((s) => s.project.site.waterSource !== null);
@@ -88,14 +87,13 @@ function PipeChecks() {
     const zonePlants = useZonePlants();
 
     const problems: string[] = [];
-    const numberOf = (id: string, kind: PipeKind) => pipes.filter((p) => p.kind === kind).findIndex((p) => p.id === id) + 1;
     for (const pipe of pipes) {
-        const label = `${KIND_LABELS[pipe.kind]} ${numberOf(pipe.id, pipe.kind)}`;
+        const label = pipeLabel(pipe, pipes);
         if (pipe.kind !== 'main' && pipeZones[pipe.id] === null) problems.push(`${label} ไม่อยู่ในโซนใด`);
         else if (!connections[pipe.id]) problems.push(`${label} ยังไม่ต่อถึงแหล่งน้ำ (เส้นประบนแผนที่)`);
     }
     zones.forEach((zone, i) => {
-        const name = zone.name || `โซน ${i + 1}`;
+        const name = zoneLabel(zone, i);
         const hasSubmain = pipes.some((p) => p.kind === 'submain' && pipeZones[p.id] === zone.id);
         const unserved = zonePlants.zones[i]?.plants.filter((p) => unservedPlantIds.has(p.id)).length ?? 0;
         if (!hasSubmain) problems.push(`${name} ยังไม่มีท่อเมนย่อย`);

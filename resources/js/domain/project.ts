@@ -114,6 +114,12 @@ export const projectSchema = z.object({
             efficiencyPct: z.number().min(10).max(100).default(60),
         })
         .prefault({}),
+    bom: z
+        .object({
+            /** Length of one pipe piece or roll by series name, m, as the designer buys it. Not in the standards. */
+            pieceLengthM: z.record(z.string().max(100), z.number().min(1).max(10_000)).default(() => ({})),
+        })
+        .prefault({}),
 });
 
 export type Project = z.infer<typeof projectSchema>;

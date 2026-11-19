@@ -57,6 +57,8 @@ export type EditorState = {
     /** null goes back to the suggested size. */
     setPipeSpec: (id: string, specId: string | null) => void;
     updatePump: (patch: Partial<PumpSettings>) => void;
+    /** null forgets the length, so the series is listed in metres only. */
+    setPieceLength: (series: string, lengthM: number | null) => void;
     removeGeneratedLateral: (midpoint: LatLng) => void;
     restoreRemovedLaterals: () => void;
     retrySave: () => void;
@@ -119,6 +121,12 @@ export function createEditorStore(initial: { id: number; name: string; project: 
             setPipePaths: (paths) => updateProject((p) => ({ pipes: p.pipes.map((pipe) => ({ ...pipe, path: paths.get(pipe.id) ?? pipe.path })) })),
             setPipeSpec: (id, specId) => updateProject((p) => ({ pipes: p.pipes.map((pipe) => (pipe.id === id ? { ...pipe, specId } : pipe)) })),
             updatePump: (patch) => updateProject((p) => ({ pump: { ...p.pump, ...patch } })),
+            setPieceLength: (series, lengthM) =>
+                updateProject((p) => {
+                    const pieceLengthM = Object.fromEntries(Object.entries(p.bom.pieceLengthM).filter(([name]) => name !== series));
+                    if (lengthM !== null) pieceLengthM[series] = lengthM;
+                    return { bom: { ...p.bom, pieceLengthM } };
+                }),
             removeGeneratedLateral: (midpoint) => updateProject((p) => ({ laterals: { ...p.laterals, removed: [...p.laterals.removed, midpoint] } })),
             restoreRemovedLaterals: () => updateProject((p) => ({ laterals: { ...p.laterals, removed: [] } })),
             retrySave: () => void save(),

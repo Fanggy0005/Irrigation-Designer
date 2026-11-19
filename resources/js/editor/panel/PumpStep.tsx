@@ -1,6 +1,7 @@
 import { pumpDuties } from '@/domain/hydraulics/designHydraulics';
 import { type PumpDuty } from '@/domain/hydraulics/pump';
 import { useHydraulics } from '../hydraulics';
+import { zoneLabel } from '../labels';
 import { useEditor } from '../store';
 import { Hint, NumberField } from './controls';
 
@@ -13,7 +14,7 @@ export function PumpStep() {
     const { duties, heaviestZoneId } = result ? pumpDuties(result.zones, pump) : { duties: {}, heaviestZoneId: null };
     const zoneName = (id: string) => {
         const i = zones.findIndex((z) => z.id === id);
-        return zones[i]?.name || `โซน ${i + 1}`;
+        return zoneLabel(zones[i], i);
     };
 
     return (

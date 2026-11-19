@@ -1,5 +1,6 @@
 import { Polygon, Tooltip } from 'react-leaflet';
 import { zoneColor } from '../colors';
+import { zoneLabel } from '../labels';
 import { useEditor } from '../store';
 
 /** Zone outlines with their names. */
@@ -19,7 +20,7 @@ export function ZoneLayer() {
                     pathOptions={{ color: zoneColor(i), weight: 2, fillOpacity: 0.12 }}
                 >
                     <Tooltip permanent direction="center" opacity={0.85}>
-                        {zone.name || `โซน ${i + 1}`}
+                        {zoneLabel(zone, i)}
                     </Tooltip>
                 </Polygon>
             ),

@@ -1,13 +1,12 @@
 import { type ZoneHydraulics } from '@/domain/hydraulics/designHydraulics';
-import { type PipeKind, type Zone } from '@/domain/project';
+import { type Zone } from '@/domain/project';
 import { cn } from '@/lib/utils';
 import { zoneColor } from '../colors';
 import { useHydraulics } from '../hydraulics';
+import { pipeLabel, zoneLabel } from '../labels';
 import { useEditor } from '../store';
 import { formatFlow, formatHead, Hint, NumberField } from './controls';
 import { SizeSelect } from './SizeSelect';
-
-const KIND_LABELS: Record<PipeKind, string> = { main: 'ท่อเมน', submain: 'ท่อเมนย่อย', lateral: 'ท่อแขนง' };
 
 export function HydraulicsStep() {
     const zones = useEditor((s) => s.project.zones);
@@ -83,17 +82,14 @@ export function HydraulicsStep() {
                             sizing={result.laterals}
                             onChange={(lateralSpecId) => updateSettings({ lateralSpecId })}
                         />
-                        {pipes.map((pipe) => {
-                            const number = pipes.filter((p) => p.kind === pipe.kind).indexOf(pipe) + 1;
-                            return (
-                                <SizeSelect
-                                    key={pipe.id}
-                                    label={`${KIND_LABELS[pipe.kind]} ${number}`}
-                                    sizing={result.pipes[pipe.id]}
-                                    onChange={(specId) => setPipeSpec(pipe.id, specId)}
-                                />
-                            );
-                        })}
+                        {pipes.map((pipe) => (
+                            <SizeSelect
+                                key={pipe.id}
+                                label={pipeLabel(pipe, pipes)}
+                                sizing={result.pipes[pipe.id]}
+                                onChange={(specId) => setPipeSpec(pipe.id, specId)}
+                            />
+                        ))}
                     </section>
                 </>
             )}
@@ -119,7 +115,7 @@ function ZoneResult({
         <div className="grid gap-2 rounded-md border p-2 text-sm">
             <p className="flex items-center gap-2 font-medium">
                 <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: zoneColor(index) }} />
-                {zone.name || `โซน ${index + 1}`}
+                {zoneLabel(zone, index)}
             </p>
             <NumberField
                 label="ระดับพื้นโซน"
