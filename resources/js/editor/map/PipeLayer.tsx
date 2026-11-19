@@ -1,7 +1,7 @@
 import { type Lateral } from '@/domain/laterals';
 import L from 'leaflet';
 import { useEffect, useState } from 'react';
-import { Pane, Polyline, useMap } from 'react-leaflet';
+import { CircleMarker, Pane, Polyline, useMap } from 'react-leaflet';
 import { PIPE_COLORS, PIPE_WEIGHTS } from '../colors';
 import { usePipeLayout } from '../pipes';
 import { useEditor } from '../store';
@@ -10,7 +10,8 @@ const PANE = 'pipes';
 
 /**
  * Pipes above the plants: the designer's mains, submains and laterals, plus the laterals
- * generated along the rows. A drawn pipe that does not reach the water source is dashed.
+ * generated along the rows. A drawn pipe that does not reach the water source is dashed, and
+ * a dot marks each point where a drawn pipe takes water from another.
  */
 export function PipeLayer() {
     const pipes = useEditor((s) => s.project.pipes);
@@ -34,6 +35,20 @@ export function PipeLayer() {
                                     weight: PIPE_WEIGHTS[pipe.kind],
                                     dashArray: connections[pipe.id] ? undefined : '8 6',
                                 }}
+                            />
+                        ),
+                )}
+            {!editing &&
+                Object.entries(connections).map(
+                    ([id, connection]) =>
+                        connection.fromPipeId !== null && (
+                            <CircleMarker
+                                key={id}
+                                center={connection.point}
+                                radius={3}
+                                interactive={false}
+                                snapIgnore
+                                pathOptions={{ color: '#0f172a', weight: 1.5, fillColor: '#ffffff', fillOpacity: 1 }}
                             />
                         ),
                 )}

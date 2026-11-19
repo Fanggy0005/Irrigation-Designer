@@ -33,15 +33,17 @@ export type PipeBomLine = {
 };
 
 export type Fittings = {
-    /** A drawn pipe branching off the middle of another. */
+    /** A main or submain branching off the middle of another, or fed in its middle from the end of another. */
     tees: number;
-    /** A drawn pipe continuing from the end of another (coupling or elbow). */
+    /** A main or submain fed in its middle from the middle of another, the two crossing. */
+    crosses: number;
+    /** A main or submain continuing from the end of another (coupling or elbow). */
     endJoints: number;
     /** Bends of BEND_DEG or more along drawn pipes. */
     elbows: number;
-    /** One per lateral where it leaves the submain. */
+    /** One per lateral where it leaves the submain, two for a drawn lateral running both ways from it. */
     lateralConnectors: number;
-    /** The far end of every lateral and every submain. */
+    /** The far end of every lateral and every submain, both ends of one fed in its middle. */
     endCaps: number;
     /** One per zone that has laterals. */
     zoneValves: number;
@@ -53,7 +55,7 @@ export type Bom = { pipes: PipeBomLine[]; emitters: number; fittings: Fittings }
 export const BEND_DEG = 30;
 /** Lengths come off a map; a millimetre over a whole number of pieces is rounding, not another piece. */
 const LENGTH_SLACK_M = 0.001;
-/** A branch this close to the end of the pipe it leaves counts as continuing from the end, m. */
+/** A joint this close to the end of a pipe counts as at its end, m. */
 const END_M = 0.5;
 
 export function billOfMaterials(input: BomInput): Bom {
@@ -83,25 +85,46 @@ export function billOfMaterials(input: BomInput): Bom {
 
 function countFittings(input: BomInput): Fittings {
     const byId = new Map(input.pipes.map((p) => [p.id, p]));
+    /** How many ways the water runs from where it enters a pipe: 2 when fed in its middle. */
+    const ways = (pipeId: string) => {
+        const connection = input.connections[pipeId];
+        const pipe = byId.get(pipeId);
+        return connection && pipe && isMiddle(connection.entryM, pathLengthM(pipe.path)) ? 2 : 1;
+    };
+
     let tees = 0;
+    let crosses = 0;
     let endJoints = 0;
     for (const pipe of input.pipes) {
         const connection = input.connections[pipe.id];
-        const parent = connection?.fromPipeId ? byId.get(connection.fromPipeId) : undefined;
-        if (!connection || !parent) continue;
-        const parentLength = pathLengthM(parent.path);
-        if (connection.atM > END_M && connection.atM < parentLength - END_M) tees++;
-        else endJoints++;
+        // A drawn lateral's joint is its lateral connector.
+        if (pipe.kind === 'lateral' || !connection) continue;
+        const parent = connection.fromPipeId ? byId.get(connection.fromPipeId) : undefined;
+        const offMiddle = parent !== undefined && isMiddle(connection.atM, pathLengthM(parent.path));
+        if (ways(pipe.id) === 2) {
+            if (offMiddle) crosses++;
+            else tees++;
+        } else if (parent) {
+            if (offMiddle) tees++;
+            else endJoints++;
+        }
     }
 
+    const lateralWays = (l: Lateral) => (l.pipeId === null ? 1 : ways(l.pipeId));
+    const lateralEnds = input.laterals.reduce((n, l) => n + lateralWays(l), 0);
     return {
         tees,
+        crosses,
         endJoints,
         elbows: input.pipes.reduce((n, p) => n + bends(p.path), 0),
-        lateralConnectors: input.laterals.length,
-        endCaps: input.laterals.length + input.pipes.filter((p) => p.kind === 'submain').length,
+        lateralConnectors: lateralEnds,
+        endCaps: lateralEnds + input.pipes.filter((p) => p.kind === 'submain').reduce((n, p) => n + ways(p.id), 0),
         zoneValves: new Set(input.laterals.map((l) => l.zoneId)).size,
     };
+}
+
+function isMiddle(atM: number, lengthM: number): boolean {
+    return atM > END_M && atM < lengthM - END_M;
 }
 
 /** Points along a line where it turns by BEND_DEG or more. */

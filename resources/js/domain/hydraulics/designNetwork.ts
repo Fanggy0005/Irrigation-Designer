@@ -10,9 +10,10 @@ import { type NetworkNode } from './network';
  * water from the source: other zones' pipes carry nothing while it runs.
  *
  * A drawn pipe becomes a chain of segments between the points where something joins it
- * (another pipe's tee, a lateral, a plant). Each plant is one node drawing its emitters'
- * flow at their operating pressure; the short tube from lateral to plant is ignored. The
- * stretch of pipe past its last joint carries no water, so it is left out.
+ * (another pipe's tee, a lateral, a plant). A pipe fed from its middle becomes two such
+ * chains, one each way from where the water enters. Each plant is one node drawing its
+ * emitters' flow at their operating pressure; the short tube from lateral to plant is
+ * ignored. The stretch of pipe past its last joint carries no water, so it is left out.
  *
  * Levels: nodes on mains sit at the source's level, everything else at its zone's level.
  */
@@ -49,7 +50,7 @@ export type DesignNetworkInput = {
 /** Joints closer than this along a pipe share a node, m. */
 const SAME_POINT_M = 1e-3;
 
-/** A pipe oriented from where its water enters. */
+/** A pipe, or the part of one on one side of where its water enters, running from there. */
 type Line = {
     key: string;
     owner: SegmentOwner;
@@ -62,26 +63,37 @@ export function buildZoneLayouts(input: DesignNetworkInput): ZoneLayout[] {
     const frame = localFrame(input.waterSource);
     const zoneLevel = new Map(input.zones.map((z) => [z.id, z.elevationM]));
 
-    // Drawn pipes that reach the source, oriented from their feed.
-    const drawn = new Map<string, Line>();
+    // Drawn pipes that reach the source, as lines running from where their water enters.
+    const drawnLines = new Map<string, Line[]>(); // by pipe id
+    const lineByKey = new Map<string, Line>();
     for (const pipe of input.pipes) {
         const connection = input.connections[pipe.id];
         if (!connection) continue;
-        const xy = pipe.path.map(frame.toLocal);
-        if (connection.reversed) xy.reverse();
         const zoneId = input.pipeZones[pipe.id];
-        drawn.set(pipe.id, {
-            key: pipe.id,
-            owner: { kind: pipe.kind, pipeId: pipe.id, lateralId: null },
-            xy,
-            elevationM: pipe.kind === 'main' || !zoneId ? input.sourceElevationM : (zoneLevel.get(zoneId) ?? input.sourceElevationM),
-            feed: connection.fromPipeId === null ? null : { key: connection.fromPipeId, atM: 0 },
-        });
+        const elevationM = pipe.kind === 'main' || !zoneId ? input.sourceElevationM : (zoneLevel.get(zoneId) ?? input.sourceElevationM);
+        const parts = linesFrom(pipe.path.map(frame.toLocal), connection.entryM).map(
+            (xy, i): Line => ({
+                key: i === 0 ? pipe.id : `${pipe.id}~back`,
+                owner: { kind: pipe.kind, pipeId: pipe.id, lateralId: null },
+                xy,
+                elevationM,
+                // The feed's pipe id for now; `attach` swaps it for the line of that pipe.
+                feed: connection.fromPipeId === null ? null : { key: connection.fromPipeId, atM: 0 },
+            }),
+        );
+        drawnLines.set(pipe.id, parts);
+        for (const line of parts) lineByKey.set(line.key, line);
     }
-    // Where each drawn pipe joins its feed, measured from where the feed's own water enters.
-    for (const line of drawn.values()) {
-        if (line.feed) line.feed.atM = closestPointOnPath(line.xy[0], drawn.get(line.feed.key)!.xy)!.alongM;
-    }
+    /** The line of a drawn pipe nearest to a point, and how far along it the point is. */
+    const attach = (point: XY, pipeId: string) => {
+        let best: { key: string; atM: number; distance: number } | null = null;
+        for (const line of drawnLines.get(pipeId)!) {
+            const hit = closestPointOnPath(point, line.xy)!;
+            if (!best || hit.distance < best.distance) best = { key: line.key, atM: hit.alongM, distance: hit.distance };
+        }
+        return { key: best!.key, atM: best!.atM };
+    };
+    for (const line of lineByKey.values()) if (line.feed) line.feed = attach(line.xy[0], line.feed.key);
 
     return input.zones.map((zone) => {
         const lines = new Map<string, Line>();
@@ -91,43 +103,83 @@ export function buildZoneLayouts(input: DesignNetworkInput): ZoneLayout[] {
         const addWithFeeds = (line: Line) => {
             for (let current: Line | undefined = line; current && !lines.has(current.key); ) {
                 lines.set(current.key, current);
-                current = current.feed ? drawn.get(current.feed.key) : undefined;
+                current = current.feed ? lineByKey.get(current.feed.key) : undefined;
             }
         };
 
         for (const lateral of input.laterals) {
             if (lateral.zoneId !== zone.id) continue;
-            const line = lateralLine(lateral, drawn, frame.toLocal, zone.elevationM);
-            if (!line) {
+            const parts = lateralLines(lateral, drawnLines, attach, frame.toLocal, zone.elevationM);
+            if (parts.length === 0) {
                 disconnectedPlantIds.push(...lateral.plantIds);
                 continue;
             }
-            addWithFeeds(line);
+            for (const line of parts) addWithFeeds(line);
             for (const plantId of lateral.plantIds) {
                 const position = input.plantPositions.get(plantId);
-                if (position) plantStops.push({ lineKey: line.key, atM: closestPointOnPath(frame.toLocal(position), line.xy)!.alongM, plantId });
+                if (!position) continue;
+                const p = frame.toLocal(position);
+                const hits = parts.map((line) => ({ line, hit: closestPointOnPath(p, line.xy)! }));
+                const nearest = hits.reduce((a, b) => (b.hit.distance < a.hit.distance ? b : a));
+                plantStops.push({ lineKey: nearest.line.key, atM: nearest.hit.alongM, plantId });
             }
         }
         return { zoneId: zone.id, ...chainLines(lines, plantStops, input), disconnectedPlantIds };
     });
 }
 
-/** A lateral as a line fed from its submain (generated) or its own connection (drawn); null if it is not fed. */
-function lateralLine(lateral: Lateral, drawn: ReadonlyMap<string, Line>, toLocal: (p: LatLng) => XY, elevationM: number): Line | null {
+/** A lateral as lines fed from its submain (generated) or its own connection (drawn); none if it is not fed. */
+function lateralLines(
+    lateral: Lateral,
+    drawnLines: ReadonlyMap<string, Line[]>,
+    attach: (point: XY, pipeId: string) => { key: string; atM: number },
+    toLocal: (p: LatLng) => XY,
+    elevationM: number,
+): Line[] {
     if (lateral.pipeId !== null) {
-        const line = drawn.get(lateral.pipeId);
-        return line ? { ...line, owner: { kind: 'lateral', pipeId: lateral.pipeId, lateralId: lateral.id }, elevationM } : null;
+        const lines = drawnLines.get(lateral.pipeId) ?? [];
+        return lines.map((line) => ({ ...line, owner: { kind: 'lateral', pipeId: lateral.pipeId, lateralId: lateral.id }, elevationM }));
     }
-    const submain = lateral.submainId === null ? undefined : drawn.get(lateral.submainId);
-    if (!submain) return null;
+    if (lateral.submainId === null || !drawnLines.has(lateral.submainId)) return [];
     const xy = lateral.path.map(toLocal);
-    return {
-        key: `lateral:${lateral.id}`,
-        owner: { kind: 'lateral', pipeId: null, lateralId: lateral.id },
-        xy,
-        elevationM,
-        feed: { key: submain.key, atM: closestPointOnPath(xy[0], submain.xy)!.alongM },
-    };
+    return [
+        {
+            key: `lateral:${lateral.id}`,
+            owner: { kind: 'lateral', pipeId: null, lateralId: lateral.id },
+            xy,
+            elevationM,
+            feed: attach(xy[0], lateral.submainId),
+        },
+    ];
+}
+
+/**
+ * A path as the lines water runs along from `entryM` m along it: the whole path from an
+ * end, or the two parts either side of a point in the middle (the forward part first).
+ */
+function linesFrom(xy: readonly XY[], entryM: number): XY[][] {
+    const backwards = [...xy].reverse();
+    let walked = 0;
+    for (let i = 1; i < xy.length; i++) {
+        const length = Math.hypot(xy[i].x - xy[i - 1].x, xy[i].y - xy[i - 1].y);
+        if (walked + length < entryM) {
+            walked += length;
+            continue;
+        }
+        const t = length === 0 ? 0 : (entryM - walked) / length;
+        const entry = { x: xy[i - 1].x + t * (xy[i].x - xy[i - 1].x), y: xy[i - 1].y + t * (xy[i].y - xy[i - 1].y) };
+        const forward = withoutStubs([entry, ...xy.slice(i)]);
+        const back = withoutStubs([entry, ...xy.slice(0, i).reverse()]);
+        if (back.length < 2) return [forward];
+        if (forward.length < 2) return [back];
+        return [forward, back];
+    }
+    return [backwards];
+}
+
+/** Drops points that sit on the one before, so no segment is shorter than SAME_POINT_M. */
+function withoutStubs(path: XY[]): XY[] {
+    return path.filter((p, i) => i === 0 || Math.hypot(p.x - path[i - 1].x, p.y - path[i - 1].y) > SAME_POINT_M);
 }
 
 /** Nodes and segments for a set of lines that all trace back to the source. */

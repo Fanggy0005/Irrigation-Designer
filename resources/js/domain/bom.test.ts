@@ -68,11 +68,61 @@ describe('billOfMaterials', () => {
     it('estimates fittings from how the pipes join', () => {
         expect(billOfMaterials(input()).fittings).toEqual({
             tees: 1, // s1 off the middle of m1
+            crosses: 0,
             endJoints: 1, // m2 from the end of m1
             elbows: 1, // m1 turns north
             lateralConnectors: 2,
             endCaps: 2 + 1, // two laterals and the submain
             zoneValves: 1,
+        });
+    });
+
+    it('counts the fittings where a pipe takes water in its middle', () => {
+        const middle: BomInput['pipes'] = [
+            { id: 'm1', kind: 'main', path: [at(0, 0), at(100, 0)] },
+            { id: 's1', kind: 'submain', path: [at(100, -20), at(100, 20)] }, // m1 ends on its middle
+            { id: 's2', kind: 'submain', path: [at(50, -20), at(50, 0), at(50, 20)] }, // crosses m1 with a point on it
+        ];
+        const { fittings } = billOfMaterials(
+            input({
+                pipes: middle,
+                pipeSpecs: { m1: pvcLarge, s1: pvcSmall, s2: pvcSmall },
+                laterals: [],
+                connections: connectPipes(at(0, 0), middle),
+            }),
+        );
+        expect(fittings).toMatchObject({
+            tees: 1, // on s1, where m1 ends
+            crosses: 1, // s2 through m1
+            endJoints: 0,
+            endCaps: 2 + 2, // both ends of each submain
+        });
+    });
+
+    it('counts the joint of a drawn lateral as lateral connectors, one per side it runs to', () => {
+        const drawn = (id: string, ...xs: number[]): BomInput['pipes'][number] => ({ id, kind: 'lateral', path: xs.map((x) => at(x, -20)) });
+        const oneSide = drawn('l1', 40, 60); // starts on s1
+        const bothSides = drawn('l2', 20, 40, 60); // crosses s1 with a point on it
+        const withLaterals = [...pipes, oneSide, bothSides];
+        const asLateral = (pipe: BomInput['pipes'][number]): Lateral => ({
+            ...lateral(pipe.id, 0, 0, 3),
+            path: [...pipe.path],
+            pipeId: pipe.id,
+            submainId: null,
+        });
+        const { fittings } = billOfMaterials(
+            input({
+                pipes: withLaterals,
+                pipeSpecs: { m1: pvcLarge, m2: pvcLarge, s1: pvcSmall, l1: lateralSpec, l2: lateralSpec },
+                laterals: [...laterals, asLateral(oneSide), asLateral(bothSides)],
+                connections: connectPipes(at(0, 0), withLaterals),
+            }),
+        );
+        expect(fittings).toMatchObject({
+            tees: 1, // still only s1 off m1
+            crosses: 0,
+            lateralConnectors: 2 + 1 + 2,
+            endCaps: 2 + 1 + 2 + 1, // generated laterals, l1, l2, s1
         });
     });
 

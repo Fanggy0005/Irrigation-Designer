@@ -9,11 +9,12 @@ import { fixed, Row, Section, Table } from './table';
 
 const FITTINGS: { key: keyof Fittings; label: string; rule: string }[] = [
     { key: 'zoneValves', label: 'วาล์วโซน', rule: 'โซนละ 1 ตัว' },
-    { key: 'tees', label: 'สามทาง (ท่อเมน/เมนย่อย)', rule: 'ท่อที่แยกออกจากกลางท่ออีกเส้น' },
+    { key: 'tees', label: 'สามทาง (ท่อเมน/เมนย่อย)', rule: 'ท่อที่แยกออกจากกลางท่ออีกเส้น หรือรับน้ำตรงกลางจากปลายท่ออีกเส้น' },
+    { key: 'crosses', label: 'สี่ทาง (ท่อเมน/เมนย่อย)', rule: 'ท่อที่ต่อผ่านกลางท่ออีกเส้น' },
     { key: 'endJoints', label: 'ข้อต่อตรงหรือข้องอที่ปลายท่อ', rule: 'ท่อที่ต่อจากปลายท่ออีกเส้น' },
     { key: 'elbows', label: 'ข้องอ', rule: `จุดหักเลี้ยวตั้งแต่ ${BEND_DEG}° ตามแนวท่อที่วาด` },
-    { key: 'lateralConnectors', label: 'ข้อต่อท่อแขนงเข้าท่อเมนย่อย', rule: 'ท่อแขนงละ 1 ตัว' },
-    { key: 'endCaps', label: 'ปลายปิด', rule: 'ปลายท่อแขนงทุกเส้นและปลายท่อเมนย่อย' },
+    { key: 'lateralConnectors', label: 'ข้อต่อท่อแขนงเข้าท่อเมนย่อย', rule: 'ท่อแขนงละ 1 ตัว (2 ตัวถ้าวาดผ่านท่อเมนย่อย)' },
+    { key: 'endCaps', label: 'ปลายปิด', rule: 'ปลายท่อแขนงทุกเส้นและปลายท่อเมนย่อย (ทั้งสองปลายถ้ารับน้ำตรงกลาง)' },
 ];
 
 /** Pipe by size, emitters and an estimate of the fittings. */

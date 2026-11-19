@@ -1,6 +1,6 @@
 import { type LatLng } from '@/domain/geometry';
 import { type Lateral, layoutLaterals } from '@/domain/laterals';
-import { connectPipes, type PipeConnection } from '@/domain/pipes';
+import { connectPipes, missedJoints, type PipeConnection } from '@/domain/pipes';
 import { type Project } from '@/domain/project';
 import { zoneOfPath, type ZonePlants } from '@/domain/zones';
 import { memoizeLast } from './memo';
@@ -10,6 +10,8 @@ import { useZonePlants } from './zones';
 export type PipeLayout = {
     /** How each connected pipe gets its water; pipes missing here are not connected. */
     connections: Record<string, PipeConnection>;
+    /** Unconnected pipes that cross a pipe they could take water from: pipe id → the pipe crossed. */
+    missedJoints: Record<string, string>;
     /** Zone of each submain and drawn lateral (null when it lies in no zone). */
     pipeZones: Record<string, string | null>;
     /** Drawn and generated laterals in every zone. */
@@ -56,6 +58,13 @@ const computePipeLayout = memoizeLast(
             removed,
         });
 
-        return { connections: connectPipes(waterSource, pipes), pipeZones, laterals, unservedPlantIds: new Set(unservedPlantIds) };
+        const connections = connectPipes(waterSource, pipes);
+        return {
+            connections,
+            missedJoints: missedJoints(waterSource, pipes, connections),
+            pipeZones,
+            laterals,
+            unservedPlantIds: new Set(unservedPlantIds),
+        };
     },
 );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { localFrame } from './geometry';
-import { connectPipes, type PipeLine } from './pipes';
+import { connectPipes, missedJoints, type PipeLine } from './pipes';
 
 const frame = localFrame({ lat: 14, lng: 101 });
 const line = (id: string, kind: PipeLine['kind'], ...points: [number, number][]): PipeLine => ({
@@ -19,9 +19,10 @@ describe('connectPipes', () => {
 
     it('follows the tree from the source, recording where each pipe tees off', () => {
         const result = connectPipes(source, [m1, m2, s1]);
-        expect(result.m1).toEqual({ fromPipeId: null, atM: 0, reversed: false });
-        expect(result.m2.fromPipeId).toBe('m1');
+        expect(result.m1).toMatchObject({ fromPipeId: null, atM: 0, entryM: 0 });
+        expect(result.m2).toMatchObject({ fromPipeId: 'm1', entryM: 0 });
         expect(result.m2.atM).toBeCloseTo(60, 6);
+        expect(frame.toLocal(result.m2.point).x).toBeCloseTo(60, 6);
         expect(result.s1.fromPipeId).toBe('m2');
         expect(result.s1.atM).toBeCloseTo(50, 6);
     });
@@ -34,7 +35,8 @@ describe('connectPipes', () => {
     it('accepts a pipe drawn towards its feed', () => {
         const backwards = line('m2', 'main', [60, 50], [60, 0.4]); // ends 0.4 m short of m1: within tolerance
         const result = connectPipes(source, [m1, backwards]);
-        expect(result.m2).toMatchObject({ fromPipeId: 'm1', reversed: true });
+        expect(result.m2.fromPipeId).toBe('m1');
+        expect(result.m2.entryM).toBeCloseTo(49.6, 6); // water enters at its last point
     });
 
     it('leaves out pipes that do not reach a feed', () => {
@@ -62,5 +64,66 @@ describe('connectPipes', () => {
 
     it('connects nothing without a water source', () => {
         expect(connectPipes(null, [m1, m2])).toEqual({});
+    });
+});
+
+describe('joints in the middle of a pipe', () => {
+    const m1 = line('m1', 'main', [0, 0], [100, 0]);
+
+    it('feeds a pipe from the middle where another pipe ends on it', () => {
+        // m1 ends against the middle of s1: an upside-down T.
+        const s1 = line('s1', 'submain', [100, -20], [100, 20]);
+        const result = connectPipes(source, [m1, s1]);
+        expect(result.s1.fromPipeId).toBe('m1');
+        expect(result.s1.atM).toBeCloseTo(100, 6);
+        expect(result.s1.entryM).toBeCloseTo(20, 6);
+        expect(frame.toLocal(result.s1.point)).toMatchObject({ x: expect.closeTo(100, 6), y: expect.closeTo(0, 6) });
+    });
+
+    it('feeds a pipe from the middle where one of its points sits on another pipe', () => {
+        // s2 crosses m1 with a point placed on it: a cross.
+        const s2 = line('s2', 'submain', [50, -20], [50, 0], [50, 30]);
+        const result = connectPipes(source, [m1, s2]);
+        expect(result.s2.fromPipeId).toBe('m1');
+        expect(result.s2.atM).toBeCloseTo(50, 6);
+        expect(result.s2.entryM).toBeCloseTo(20, 6);
+    });
+
+    it('does not join pipes that only cross', () => {
+        const s3 = line('s3', 'submain', [50, -20], [50, 30]);
+        expect(connectPipes(source, [m1, s3]).s3).toBeUndefined();
+    });
+
+    it('keeps the joint at an end when an end touches', () => {
+        // s4 starts on m1's end, and m1's end is also on s4: the end joint wins.
+        const s4 = line('s4', 'submain', [100, 0], [100, 40]);
+        expect(connectPipes(source, [m1, s4]).s4).toMatchObject({ fromPipeId: 'm1', entryM: 0 });
+    });
+
+    it('still lets only what may feed a pipe feed it', () => {
+        // A main cannot take water from a submain, whichever way they meet.
+        const s1 = line('s1', 'submain', [0, 0], [0, 50]); // fed straight from the source
+        const m5 = line('m5', 'main', [-20, 50], [20, 50]); // s1 ends on its middle
+        const m6 = line('m6', 'main', [-20, 30], [0, 30], [20, 30]); // has a point on s1's middle
+        const result = connectPipes(source, [s1, m5, m6]);
+        expect(result.m5).toBeUndefined();
+        expect(result.m6).toBeUndefined();
+    });
+});
+
+describe('missedJoints', () => {
+    const m1 = line('m1', 'main', [0, 0], [100, 0]);
+
+    it('finds a pipe left unconnected where it crosses a pipe that could feed it', () => {
+        const s3 = line('s3', 'submain', [50, -20], [50, 30]);
+        const pipes = [m1, s3];
+        expect(missedJoints(source, pipes, connectPipes(source, pipes))).toEqual({ s3: 'm1' });
+    });
+
+    it('says nothing of pipes that are connected or could not take water from what they cross', () => {
+        const joined = line('s2', 'submain', [50, -20], [50, 0], [50, 30]);
+        const lateral = line('l1', 'lateral', [30, -10], [30, 10]); // a lateral cannot come off a main
+        const pipes = [m1, joined, lateral];
+        expect(missedJoints(source, pipes, connectPipes(source, pipes))).toEqual({});
     });
 });

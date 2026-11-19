@@ -34,17 +34,48 @@ const catalog = [
     ]),
 ];
 
-type Options = { mainSpecId?: string | null; zoneElevationM?: number; withMain?: boolean; withDrawnLateral?: boolean };
+type Options = {
+    mainSpecId?: string | null;
+    zoneElevationM?: number;
+    withMain?: boolean;
+    withDrawnLateral?: boolean;
+    /** The main comes in from the west at y = 12.5 and ends on the middle of the submain. */
+    mainToMiddle?: boolean;
+    /** The drawn lateral crosses the submain, with a point on it, to a second plant to the west. */
+    lateralBothWays?: boolean;
+};
 
 // A plant placed by hand between the rows, on a lateral drawn east from the submain.
 const handPlaced = { id: 'a0', position: at(140, 12), row: null };
-const drawnLateral = { id: 'p9', kind: 'lateral' as const, path: [at(120, 12), at(150, 12)], specId: null };
+const handPlacedWest = { id: 'a1', position: at(110, 12), row: null };
 
-function analyse({ mainSpecId = null, zoneElevationM = 0, withMain = true, withDrawnLateral = false }: Options = {}) {
-    const allPlants = withDrawnLateral ? [...plants, handPlaced] : plants;
+function analyse({
+    mainSpecId = null,
+    zoneElevationM = 0,
+    withMain = true,
+    withDrawnLateral = false,
+    mainToMiddle = false,
+    lateralBothWays = false,
+}: Options = {}) {
+    const drawnLateral = {
+        id: 'p9',
+        kind: 'lateral' as const,
+        path: lateralBothWays ? [at(105, 12), at(120, 12), at(150, 12)] : [at(120, 12), at(150, 12)],
+        specId: null,
+    };
+    const allPlants = [...plants, ...(withDrawnLateral ? [handPlaced] : []), ...(withDrawnLateral && lateralBothWays ? [handPlacedWest] : [])];
     const zones = [{ id: 'z1', name: 'โซน 1', polygon: field, elevationM: zoneElevationM }];
     const pipes = [
-        ...(withMain ? [{ id: 'm1', kind: 'main' as const, path: [at(0, 0), at(120, 0)], specId: mainSpecId }] : []),
+        ...(withMain
+            ? [
+                  {
+                      id: 'm1',
+                      kind: 'main' as const,
+                      path: mainToMiddle ? [at(0, 0), at(0, 12.5), at(120, 12.5)] : [at(0, 0), at(120, 0)],
+                      specId: mainSpecId,
+                  },
+              ]
+            : []),
         { id: 's1', kind: 'submain' as const, path: [at(120, 0), at(120, 20)], specId: null },
         ...(withDrawnLateral ? [drawnLateral] : []),
     ];
@@ -120,6 +151,20 @@ describe('analyseHydraulics', () => {
         expect(zone.overVariation).toBe(zone.variationPct > 20);
     });
 
+    it('splits the flow both ways along a submain fed from its middle', () => {
+        // The main ends on the submain at y = 12.5, between the rows: each 5 m half carries one row.
+        const split = analyse({ mainToMiddle: true });
+        const minor = 1.1;
+        // 720 L/h is 1.13 m/s in 15 mm, under the limit, so the submain comes out smaller.
+        expect(split.pipes.s1).toMatchObject({ designFlowLph: 720 });
+        expect(split.pipes.s1.spec.id).toBe('P-19');
+        const solution = split.zones[0].solution!;
+        expect(solution.flowLph).toBe(1_440);
+        expect(solution.lossesM.main).toBeCloseTo(frictionLossM(1_440, 32, 132.5, 150) * minor, 4);
+        expect(solution.lossesM.submain).toBeCloseTo(frictionLossM(720, 15, 5, 150) * minor, 4);
+        expect(solution.lossesM.lateral).toBeCloseTo(zone.lossesM.lateral, 6);
+    });
+
     it('uses the size the designer chose and flags what it breaks', () => {
         const small = analyse({ mainSpecId: 'P-19' });
         expect(small.pipes.m1).toMatchObject({ chosen: true, overVelocity: true });
@@ -148,6 +193,13 @@ describe('analyseHydraulics', () => {
         expect(withLateral.pipes.p9).toMatchObject({ designFlowLph: 60, chosen: false });
         expect(withLateral.pipes.p9.spec.id).toBe('L-12'); // 60 L/h is slow even in 10 mm
         expect(withLateral.pipes.s1.designFlowLph).toBe(25 * 60);
+    });
+
+    it('waters plants both ways along a drawn lateral fed from its middle', () => {
+        const both = analyse({ withDrawnLateral: true, lateralBothWays: true });
+        expect(both.zones[0].disconnectedPlantIds).toEqual([]);
+        expect(both.zones[0].solution!.flowLph).toBe(26 * 60);
+        expect(both.pipes.p9.designFlowLph).toBe(60); // each side carries its one plant
     });
 
     it('leaves a zone unsolved when its submain does not reach the source', () => {

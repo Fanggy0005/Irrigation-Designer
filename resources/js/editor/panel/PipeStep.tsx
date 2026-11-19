@@ -83,14 +83,19 @@ export function PipeStep() {
 function PipeChecks() {
     const zones = useEditor((s) => s.project.zones);
     const pipes = useEditor((s) => s.project.pipes);
-    const { connections, pipeZones, unservedPlantIds } = usePipeLayout();
+    const { connections, missedJoints, pipeZones, unservedPlantIds } = usePipeLayout();
     const zonePlants = useZonePlants();
 
     const problems: string[] = [];
     for (const pipe of pipes) {
         const label = pipeLabel(pipe, pipes);
         if (pipe.kind !== 'main' && pipeZones[pipe.id] === null) problems.push(`${label} ไม่อยู่ในโซนใด`);
-        else if (!connections[pipe.id]) problems.push(`${label} ยังไม่ต่อถึงแหล่งน้ำ (เส้นประบนแผนที่)`);
+        else if (missedJoints[pipe.id]) {
+            const crossed = pipes.find((p) => p.id === missedJoints[pipe.id])!;
+            problems.push(
+                `${label} ตัดผ่าน${pipeLabel(crossed, pipes)}แต่ยังไม่ได้ต่อกัน: วางจุดของท่อไว้บนท่ออีกเส้นตรงที่ตัด (แก้แนวท่อ แล้วลากจุดกึ่งกลางเส้นไปวาง)`,
+            );
+        } else if (!connections[pipe.id]) problems.push(`${label} ยังไม่ต่อถึงแหล่งน้ำ (เส้นประบนแผนที่)`);
     }
     zones.forEach((zone, i) => {
         const name = zoneLabel(zone, i);
